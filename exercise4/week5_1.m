@@ -1,0 +1,148 @@
+close all;
+clear all;
+clc;
+
+A = [0.9752 1.4544; ... 
+    -0.0327 0.9315];
+B = [0.0248; 0.0327];
+
+% Initial condition
+x0 = [3; 0];
+
+N = 10;
+Q = 10*eye(2);
+R = 1;
+
+% constraints
+M = [1;-1]; m = [1.75;1.75];
+F = [1 0; 0 1; -1 0; 0 -1]; f = [5; 0.2; 5; 0.2];
+
+
+%% compute terminal controller
+% Compute LQR controller
+[K,Qf,~] = dlqr(A,B,Q,R);
+K = -K; % Note that matlab defines K as -K
+Acl = [A+B*K]; % Closed-loop dynamics
+
+% Compute the maximal invariant set
+Xf = polytope([F;M*K],[f;m]);
+while 1
+        prevXf = Xf;
+        [T,t] = double(Xf);      
+        % Compute the pre-set
+        preXf = polytope(T*Acl,t);
+
+        Xf = intersect(Xf,preXf);
+        if isequal(prevXf,Xf)
+            break
+        end
+end
+
+[Ff,ff] = double(Xf);
+
+
+%% DEFINE MATRICES
+
+% molto bello ma complicato e inutile, vedi dopo commenti modo semplice per costruire le matrici
+% zeros_my = zeros(size(A,1));
+% zeros_B = zeros(2,1);
+% eye_my = eye(size(A,1));
+% t = A;
+% for i = 1:N-1
+%     t = [t;zeros_my];
+% end
+% 
+% Tsx = [];
+% Tdx = [];
+% for i = 1:N
+%     row_sx = [];
+%     row_dx = [];
+%     for j = 1:N
+%         if j == i
+%             row_sx = [row_sx eye_my];
+%             row_dx = [row_dx -B];
+%         elseif j == i - 1
+%             row_sx = [row_sx -A];
+%             row_dx = [row_dx zeros_B];
+% 
+%         else
+%             row_sx = [row_sx zeros_my];
+%             row_dx = [row_dx zeros_B];
+%         end
+%     end
+%     Tsx = [Tsx;row_sx];
+%     Tdx = [Tdx;row_dx];
+% 
+% end
+% T = [Tsx Tdx];
+% 
+G = blkdiag(kron(eye(N-1),F),Ff,kron(eye(N),M));
+g = [kron(ones(N-1,1),f); ff;kron(ones(N,1),m)];
+
+H = blkdiag(kron(eye(N-1),Q), Qf, kron(eye(N),R));
+
+n = size(A,1); nu = size(B,2);
+
+%T = [kron(eye(N),eye(n)) + [zeros(n,n*N); kron(eye(N-1),-A) zeros((N-1)*n,n)]];
+% summing the identity 
+T = [eye(N*n) +... 
+    % add the first row of zeros and the last column
+[zeros(n,n*N); kron(eye(N-1),-A) zeros((N-1)*n,n)]];
+
+T = [T kron(eye(N),-B)];
+
+t = [A; zeros((N-1)*n,n)];
+
+
+%% PLOT
+sol.x(:,1) = x0;
+i = 1;
+try
+    while norm(sol.x(:,end)) > 1e-3 % Simulate until convergence
+        % Solve MPC problem for current state
+   
+        [z,fval,flag] = quadprog(H,zeros(size(H,1),1),G,g,T,t*sol.x(:,i));
+        if flag ~= 1, error('Error in optimizer - could not solve the problem'); end
+        
+        % Extract the optimal input
+        sol.u(:,i) = z(N*n+1:N*n+nu);
+        
+        % Apply the optimal input to the system
+        sol.x(:,i+1) = A*sol.x(:,i) + B*sol.u(:,i);
+        
+        i = i + 1;
+    end
+catch
+    i
+    disp('---> Initial state is outside the feasible set <---\n');
+end
+i
+
+%% Plotting the results
+
+figure
+hold on; grid on;
+
+o = ones(1,size(sol.x,2));
+
+subplot(3,1,1)
+hold on; grid on;
+plot(sol.x(1,:),'-k','markersize',20,'linewidth',2);
+plot(1:size(sol.x,2),f(1)*o,'r','linewidth',2)
+plot(1:size(sol.x,2),-f(3)*o,'r','linewidth',2)
+ylabel('Position')
+
+subplot(3,1,2)
+hold on; grid on;
+plot(sol.x(2,:),'-k','markersize',20,'linewidth',2);
+plot(1:size(sol.x,2),f(2)*o,'r','linewidth',2)
+plot(1:size(sol.x,2),-f(4)*o,'r','linewidth',2)
+ylabel('Velocity')
+
+subplot(3,1,3)
+o = ones(1,size(sol.u,2));
+hold on; grid on;
+plot(sol.u,'k','markersize',20,'linewidth',2);
+plot(1:size(sol.u,2),m(1)*o,'r','linewidth',2)
+plot(1:size(sol.u,2),-m(2)*o,'r','linewidth',2)
+ylabel('Input')
