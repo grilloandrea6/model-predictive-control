@@ -51,7 +51,7 @@ x_hist(:,1)     = [1;2]; %Initial condition
 x_hat_hist(:,1) = [3;0]; %Initial estimate
 
 d   = 0.2;    % Disturbances
-r   = .2;      % Reference
+r   = 1;      % Reference
 
 %L = 0.5*eye(size(C,1)); % Observer matrix
 
@@ -71,8 +71,8 @@ eigs(A_bar+L*C_bar)
 
 for i = 1:nsteps-1
     fprintf('step %i \n',i);
-        [xs, us] = compute_sp(A,B,C,R,r,d_hat_hist(:,i),umin,umax)
-
+    [xs, us] = compute_sp(A,B,C,R,r,d_hat_hist(:,i),umin,umax);
+    
     %% Set up the MPC cost and constraints using the computed set-point
     constraints = [];
     objective   = 0;
@@ -118,7 +118,7 @@ end
 plot(u_hist); hold on
 plot(umax*ones(size(u_hist)),'--');
 plot(umin*ones(size(u_hist)),'--'); 
-legend('u','u_{max}','u_{min}');
+legend('u','u_max','u_min');
 
 figure
 
@@ -127,6 +127,7 @@ plot(x_hist(2,:),'b');
 plot(x_hat_hist(1,:),'r--'); hold on 
 plot(x_hat_hist(2,:),'b--'); 
 legend('$x_1$','$x_2$','$\hat{x}_1$','$\hat{x}_2$','Interpreter','latex')
+
 figure
 
 plot(d*ones(size(d_hat_hist)),'--'); hold on
