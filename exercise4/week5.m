@@ -52,24 +52,7 @@ con = [];
 obj = 0;
 
 con =(M*u(:,1) <= m);
-% - - - 
-%con = con + (F*x(:,1) <= f);
-% % - - - 
-% 
-% con = con + (x(:,1) == x0(1)) + (x(:,2) == x0(2));
-% for i = 2:N-1
-%     con = con + (x(:,i+1) == A*x(:,i) + B*u(:,i));
-% 
-%      con = con + (F*x(:,i) <= f);
-% 
-%     con = con + (M*u(:,i) <= m);
-%     obj = obj + u(:,i)'*R*u(:,i);
-%     obj = obj + x(:,i)'*Q*x(:,i);
-% end
-% 
-% con = con + (Ff*x(:,N) <= ff);
-% obj = obj + x(:,N)'*Qf*x(:,N);
-% 
+
 
 % Define constraints and objective
 con = [];
@@ -88,34 +71,6 @@ obj = obj + x(:,N)'*Qf*x(:,N); % Terminal weight
 % Compile the matrices
 ctrl = optimizer(con, obj, sdpsettings('solver','sedumi'), x(:,1), u(:,1));
 
-% % 
-% %     con = (x(:,1) == x0) + (x(:,2) == A*x(:,1) + B*u(:,1)) + (M*u(:,1) <= m);
-% %     obj = u(:,1)'*R*u(:,1);
-% %     for i = 2:N-1
-% %         con = con + (x(:,i+1) == A*x(:,i) + B*u(:,i));
-% %         con = con + (F*x(:,i) <= f);
-% %         con = con + (M*u(:,i) <= m);
-% %         obj = obj + x(:,i)'*Q*x(:,i) + u(:,i)'*R*u(:,i);
-% %     end
-% %     con = con + (Ff*x(:,N) <= ff);
-% %     obj = obj + x(:,N)'*Qf*x(:,N);
-% % 
-% % % 
-% % % con = [];
-% % % obj = 0;
-% % % x(:,1) = x0;
-% % % for i = 1:N-1
-% % %     con = [con, x(:,i+1) == A*x(:,i) + B*u(:,i)]; % System dynamics
-% % %     con = [con, F*x(:,i) <= f]; % State constraints
-% % %     con = [con, M*u(:,i) <= m]; % Input constraints
-% % %     obj = obj + x(:,i)'*Q*x(:,i) + u(:,i)'*R*u(:,i); % Cost function
-% % % end
-% % % 
-% % % con = [con, Ff*x(:,N) <= ff]; % Terminal constraint
-% % % Qf = Q;
-% % % obj = obj + x(:,N)'*Qf*x(:,N); % Terminal weight
-% % 
-% 
 
 %% Simulating the closed-loop system
 
@@ -182,19 +137,12 @@ plot(x(1),x(2))
 hold on
 
 for i = 1:50
- plot(x(1),x(2),'o')
-hold on
+    plot(x(1),x(2),'o')
+    hold on
 
-     x = A*x + B*uopt
-     [uopt,infeasible] = ctrl{x}
-     if infeasible == 1 
-         error("infeasible")
-     end
+    x = A*x + B*uopt
+    [uopt,infeasible] = ctrl{x}
+    if infeasible == 1 
+        error("infeasible")
+    end
 end
-% 
-% for i = 1:N
-% 
-%     x = A*x + B*uopt
-%     [uopt,infeasible] = ctrl{x}
-%     assert(infeasible ~= 1)
-% end
