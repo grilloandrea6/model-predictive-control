@@ -7,46 +7,18 @@ B = [.2173; .0573];
 C = [0 1];
 
 %% design of the observer using augmented system
-Bd = [0;0];
+Bd = zeros(2,1);
 Cd = 1;
-augTest = [A-eye(2) Bd; C Cd];
 
-Aaug = [A zeros(2, 1); 0 0 1];
-Baug = [B;Bd];
+Aaug = [A Bd; 0 0 1];
+Baug = [B;0];
 Caug = [C Cd];
 
 L = -place (Aaug',Caug',[.5 .6 .7])';
 
-
-%% find a steady state
-r = 1;
-
-xs = sdpvar(2,1,'full');
-us = sdpvar(1,1,'full');
-
-obj = us'*us;
-
-const = (-3 <= us) + ( us <= 3) + (xs == A*xs + B*us) + (r == C*xs);
-
-diagnostics = solvesdp(const,obj);
-
-if diagnostics.problem == 0
-   % Good! 
-elseif diagnostics.problem == 1
-    throw(MException('','Infeasible'));
-else
-    throw(MException('','Something else happened'));
-end
-
-
-us = double(us);
-xs = double(xs);
-
-
 %% MPC controller 
 % no terminal set
 % terminal cost deltaXn' P deltaXn
-
 
 %horizon length
 N    = 5;
@@ -73,46 +45,77 @@ u_hist(1) = 0;
 
 u = sdpvar(1,N);
 
-for i= 1:nsteps
-    x = x_hist(:,i);
-    
-    
+r = 1;
+xs_ = sdpvar(2,1,'full');
+us_ = sdpvar(1,1,'full');
+obj_steady = us_^2;
 
+for i= 1:nsteps-1
+    fprintf("step %d\n",i)
+    x = x_hist(:,i);
+
+    %% find a steady state    
+    con_steady = (-3 <= us_) + ( us_ <= 3) + (xs_ == A*xs_ + B*us_) + (r == C*xs_ + d_hat_hist(i));
+    solvesdp(con_steady,obj_steady,sdpsettings('verbose',0));
+    
+    us = double(us_);
+    xs = double(xs_);
+
+    %% MPC
     % Define constraints and objective
-    con = u == u_hist(i);
+    x = x_hist(:,i);
+    u = sdpvar(1,N);
+    con = [];
     obj = 0;
-    for i = 1:N-1
-        x = A*x + B*u(i);
-        con = [con, x(:,i+1) == A*(x(:,i)-xs) + B*(u(:,i)-us)]; % System dynamics
-        con = [con, u(i) >= -3, u(i) <= 3]; % Input constraints
-        obj = obj + (x(:,i)-xs)'*Q*(x(:,i)-xs) + (u(i)-us)'*R*(u(i)-us); % Cost function
+    for k = 1:N
+        x = A*x + B*u(k);
+        
+        con = [con, u(k) >= -3, u(k) <= 3]; % Input constraints
+
+        obj = obj + (x-xs)'*Q*(x-xs) + (u(k)-us)'*R*(u(k)-us); % Cost function
     end
     
-    obj = obj + x(:,N)'*P*x(:,N); % Terminal weight
-    
-    % Compile the matrices
-    ctrl = optimizer(con, obj, sdpsettings('solver','sedumi'), x(:,1), u(:,1));
-    
+    obj = obj + (x-xs)'*P*(x-xs); % Terminal weight
+    solvesdp(con,obj,sdpsettings('verbose',0));
 
-    
+    u_hist(i) = double(u(1));
+    x_hist(:,i+1) = A * x_hist(:,i) + B * u_hist(i);
+    y = C*x_hist(:,i) + d;
+
+    x_bar = [x_hat_hist(:,i); d_hat_hist(:,i)];
+    x_bar_next = Aaug*x_bar;
+    x_bar_next = x_bar_next + Baug*u_hist(:,i);
+    x_bar_next = x_bar_next + L*(Caug*x_bar - y);
+
+    x_hat_hist(:,i+1) = x_bar_next(1:2);
+    d_hat_hist(:,i+1) = x_bar_next(3);
 end
 
 
 
 
 
+plot(u_hist); hold on
+plot(3*ones(size(u_hist)),'--');
+plot(-3*ones(size(u_hist)),'--'); 
+legend('u','u_max','u_min');
 
+figure
 
+plot(x_hist(1,:),'r'); hold on 
+plot(x_hist(2,:),'b'); 
+plot(x_hat_hist(1,:),'r--'); hold on 
+plot(x_hat_hist(2,:),'b--'); 
+legend('$x_1$','$x_2$','$\hat{x}_1$','$\hat{x}_2$','Interpreter','latex')
 
-% x0 = [1;2;.2];
-% x= zeros(3,150);
-% y = zeros(1,150);
-% x(:,1) = x0;
-% y(1,:) = Caug * x0;
+figure
 
+plot(d*ones(size(d_hat_hist)),'--'); hold on
+plot(d_hat_hist); 
+legend('$d$','$\hat{d}$','Interpreter','latex')
 
+figure
 
-%for i = 2:100
-%    x(:,i+1) = L*x(:,i);
-%    y(i,:) = Caug * x(:,i);
-%end
+plot(C*x_hist+d*ones(size(C*x_hist))); hold on
+plot(r*ones(size(C*x_hist))); 
+legend('y','r');
