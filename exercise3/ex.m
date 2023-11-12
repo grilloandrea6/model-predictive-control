@@ -1,4 +1,4 @@
-x   clear all
+clear all
 close all
 clc
 alpha = pi/6;
